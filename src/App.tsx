@@ -14,6 +14,7 @@ import Adjustments from "./pages/Adjustments";
 import Warehouses from "./pages/Warehouses";
 import History from "./pages/History";
 import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile"; // <--- NEW IMPORT
 
 const queryClient = new QueryClient();
 
@@ -24,9 +25,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/auth" element={<Auth />} />
+          
           <Route element={<Layout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/products" element={<Products />} />
             <Route path="/receipts" element={<Receipts />} />
@@ -35,6 +37,7 @@ const App = () => (
             <Route path="/adjustments" element={<Adjustments />} />
             <Route path="/warehouses" element={<Warehouses />} />
             <Route path="/history" element={<History />} />
+            <Route path="/profile" element={<Profile />} /> {/* <--- NEW ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

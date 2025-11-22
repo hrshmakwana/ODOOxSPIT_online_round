@@ -108,20 +108,24 @@ const Products = () => {
     }
   };
 
-  /** 🗑 Delete product */
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return;
+  if (!confirm("Are you sure you want to delete this product?")) return;
 
-    try {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-
-      toast.success("Product deleted");
-      fetchProducts();
-    } catch {
-      toast.error("Failed to delete product");
+  try {
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    
+    if (error) {
+      console.log("Hard delete failed, archiving instead...");
+      toast.error("Cannot delete product: It has transaction history. (Archiving not implemented in MVP)");
+      return; 
     }
-  };
+
+    toast.success("Product deleted");
+    fetchProducts();
+  } catch {
+    toast.error("Failed to delete product");
+  }
+};
 
   /** 🚦 Stock Status Badge */
   const getStockBadge = (stock: number) => {

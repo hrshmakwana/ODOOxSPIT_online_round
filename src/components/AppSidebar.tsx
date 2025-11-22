@@ -10,7 +10,7 @@ import {
   Settings,
   User,
   LogOut,
-  History,
+  History as HistoryIcon,
   Sliders,
 } from "lucide-react";
 import {
@@ -38,11 +38,12 @@ const operationsItems = [
   { title: "Deliveries", url: "/deliveries", icon: ArrowUpFromLine },
   { title: "Transfers", url: "/transfers", icon: ArrowLeftRight },
   { title: "Adjustments", url: "/adjustments", icon: Sliders },
-  { title: "Stock History", url: "/history", icon: History },
+  { title: "Stock History", url: "/history", icon: HistoryIcon },
 ];
 
 const settingsItems = [
   { title: "Warehouses", url: "/warehouses", icon: Settings },
+  { title: "My Profile", url: "/profile", icon: User }, // <--- NEW LINK ADDED HERE
 ];
 
 export function AppSidebar() {
@@ -67,11 +68,11 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="p-4 flex items-center justify-center border-b border-border/50">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center shadow-glass">
-              <Package className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 bg-gradient-to-r from-primary to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+              <Package className="w-6 h-6 text-white" />
             </div>
             {!isCollapsed && (
-              <span className="font-bold text-lg bg-gradient-primary bg-clip-text text-transparent">
+              <span className="font-bold text-lg bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
                 StockMaster
               </span>
             )}

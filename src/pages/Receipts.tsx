@@ -14,12 +14,22 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import ReceiptDialog from "@/components/ReceiptDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const Receipts = () => {
   const [receipts, setReceipts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+
+  // NEW: Filter State
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     fetchReceipts();
@@ -40,6 +50,11 @@ const Receipts = () => {
       setLoading(false);
     }
   };
+
+  // NEW: Filter Logic
+  const filteredReceipts = receipts.filter(r =>
+    statusFilter === "all" ? true : r.status === statusFilter
+  );
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; label: string }> = {
@@ -64,7 +79,6 @@ const Receipts = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Get receipt items
       const { data: items, error: itemsError } = await supabase
         .from("receipt_items")
         .select("*")
@@ -72,9 +86,7 @@ const Receipts = () => {
 
       if (itemsError) throw itemsError;
 
-      // Update stock for each item
       for (const item of items || []) {
-        // Get or create warehouse stock record
         const { data: existingStock } = await supabase
           .from("product_warehouse_stock")
           .select("*")
@@ -97,7 +109,6 @@ const Receipts = () => {
           });
         }
 
-        // Add to stock ledger
         await supabase.from("stock_ledger").insert({
           product_id: item.product_id,
           warehouse_id: receipt.warehouse_id,
@@ -110,7 +121,6 @@ const Receipts = () => {
         });
       }
 
-      // Update receipt status
       const { error: updateError } = await supabase
         .from("receipts")
         .update({
@@ -150,6 +160,22 @@ const Receipts = () => {
         </Button>
       </div>
 
+      {/* NEW: Filter Dropdown */}
+      <div className="flex gap-2 mb-4">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px] bg-background border-input text-foreground">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover text-popover-foreground">
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="waiting">Waiting</SelectItem>
+            <SelectItem value="ready">Ready</SelectItem>
+            <SelectItem value="done">Done</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="glass-card rounded-xl border border-border/50 overflow-hidden">
         <Table>
           <TableHeader>
@@ -169,14 +195,14 @@ const Receipts = () => {
                   Loading...
                 </TableCell>
               </TableRow>
-            ) : receipts.length === 0 ? (
+            ) : filteredReceipts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No receipts found. Create your first receipt to get started.
+                  No receipts found matching filter.
                 </TableCell>
               </TableRow>
             ) : (
-              receipts.map((receipt) => (
+              filteredReceipts.map((receipt) => (
                 <TableRow key={receipt.id} className="border-border/50">
                   <TableCell className="font-mono text-primary">
                     {receipt.receipt_number}
