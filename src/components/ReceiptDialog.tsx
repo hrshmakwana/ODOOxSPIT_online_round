@@ -40,9 +40,11 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
   const [items, setItems] = useState<any[]>([{ product_id: "", quantity: 1 }]);
 
   useEffect(() => {
-    fetchWarehouses();
-    fetchProducts();
-  }, []);
+    if (open) {
+      fetchWarehouses();
+      fetchProducts();
+    }
+  }, [open]); // Fetch when dialog opens
 
   useEffect(() => {
     if (receipt) {
@@ -62,10 +64,11 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
       });
       setItems([{ product_id: "", quantity: 1 }]);
     }
-  }, [receipt]);
+  }, [receipt, open]);
 
   const fetchWarehouses = async () => {
-    const { data } = await supabase.from("warehouses").select("*").eq("is_active", true);
+    // Removed .eq('is_active', true) just to be safe for the hackathon
+    const { data } = await supabase.from("warehouses").select("*");
     setWarehouses(data || []);
   };
 
@@ -86,23 +89,27 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.warehouse_id) {
+        toast.error("Please select a warehouse");
+        return;
+    }
     setLoading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const receiptNumber = `REC-${Date.now()}`;
+      
+      // Generate a random receipt number if creating new
+      const receiptNumber = `REC-${Math.floor(Math.random() * 100000)}`;
 
       if (receipt) {
-        // Update existing receipt
+        // Update
         const { error } = await supabase
           .from("receipts")
           .update(formData)
           .eq("id", receipt.id);
         if (error) throw error;
 
-        // Delete old items and insert new ones
+        // Reset Items (Simple delete all and re-add strategy for MVP)
         await supabase.from("receipt_items").delete().eq("receipt_id", receipt.id);
         
         const itemsToInsert = items.map(item => ({
@@ -111,39 +118,31 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
           quantity: item.quantity,
         }));
         
-        const { error: itemsError } = await supabase
-          .from("receipt_items")
-          .insert(itemsToInsert);
-        if (itemsError) throw itemsError;
+        await supabase.from("receipt_items").insert(itemsToInsert);
 
-        toast.success("Receipt updated successfully");
+        toast.success("Receipt updated");
       } else {
-        // Create new receipt
+        // Create
         const { data: newReceipt, error } = await supabase
           .from("receipts")
           .insert([{
             ...formData,
             receipt_number: receiptNumber,
-            created_by: user.id,
+            created_by: user?.id,
           }])
           .select()
           .single();
 
         if (error) throw error;
 
-        // Insert items
         const itemsToInsert = items.map(item => ({
           receipt_id: newReceipt.id,
           product_id: item.product_id,
           quantity: item.quantity,
         }));
 
-        const { error: itemsError } = await supabase
-          .from("receipt_items")
-          .insert(itemsToInsert);
-        if (itemsError) throw itemsError;
-
-        toast.success("Receipt created successfully");
+        await supabase.from("receipt_items").insert(itemsToInsert);
+        toast.success("Receipt created");
       }
 
       onSuccess();
@@ -159,7 +158,7 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass-panel border-border/50 max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl bg-gradient-primary bg-clip-text text-transparent">
+          <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
             {receipt ? "Edit Receipt" : "New Receipt"}
           </DialogTitle>
         </DialogHeader>
@@ -173,7 +172,6 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                 value={formData.supplier_name}
                 onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
                 required
-                className="glass-card border-border/50"
               />
             </div>
             <div className="space-y-2">
@@ -183,7 +181,7 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                 onValueChange={(value) => setFormData({ ...formData, warehouse_id: value })}
                 required
               >
-                <SelectTrigger className="glass-card border-border/50">
+                <SelectTrigger>
                   <SelectValue placeholder="Select warehouse" />
                 </SelectTrigger>
                 <SelectContent>
@@ -198,7 +196,7 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
           </div>
 
           <div className="space-y-2">
-            <Label>Items *</Label>
+            <Label>Products *</Label>
             <div className="space-y-2">
               {items.map((item, index) => (
                 <div key={index} className="flex gap-2 items-end">
@@ -210,10 +208,9 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                         newItems[index].product_id = value;
                         setItems(newItems);
                       }}
-                      required
                     >
-                      <SelectTrigger className="glass-card border-border/50">
-                        <SelectValue placeholder="Select product" />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Product" />
                       </SelectTrigger>
                       <SelectContent>
                         {products.map((prod) => (
@@ -228,15 +225,13 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                     <Input
                       type="number"
                       min="1"
-                      step="0.01"
                       value={item.quantity}
                       onChange={(e) => {
                         const newItems = [...items];
                         newItems[index].quantity = parseFloat(e.target.value);
                         setItems(newItems);
                       }}
-                      className="glass-card border-border/50"
-                      required
+                      placeholder="Qty"
                     />
                   </div>
                   <Button
@@ -246,7 +241,7 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                     onClick={() => setItems(items.filter((_, i) => i !== index))}
                     disabled={items.length === 1}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               ))}
@@ -255,7 +250,6 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
                 variant="outline"
                 size="sm"
                 onClick={() => setItems([...items, { product_id: "", quantity: 1 }])}
-                className="border-border/50"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item
@@ -264,23 +258,12 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="glass-card border-border/50"
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
             <Select
               value={formData.status}
               onValueChange={(value) => setFormData({ ...formData, status: value })}
             >
-              <SelectTrigger className="glass-card border-border/50">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -292,21 +275,12 @@ const ReceiptDialog = ({ open, onOpenChange, receipt, onSuccess }: ReceiptDialog
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-border/50"
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-gradient-primary hover:opacity-90 shadow-glass"
-            >
+            <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {receipt ? "Update" : "Create"} Receipt
+              Save Receipt
             </Button>
           </div>
         </form>

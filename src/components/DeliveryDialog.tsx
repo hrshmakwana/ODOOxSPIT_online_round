@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -40,9 +39,11 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
   const [items, setItems] = useState<any[]>([{ product_id: "", quantity: 1 }]);
 
   useEffect(() => {
-    fetchWarehouses();
-    fetchProducts();
-  }, []);
+    if (open) {
+      fetchWarehouses();
+      fetchProducts();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (delivery) {
@@ -62,10 +63,10 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
       });
       setItems([{ product_id: "", quantity: 1 }]);
     }
-  }, [delivery]);
+  }, [delivery, open]);
 
   const fetchWarehouses = async () => {
-    const { data } = await supabase.from("warehouses").select("*").eq("is_active", true);
+    const { data } = await supabase.from("warehouses").select("*");
     setWarehouses(data || []);
   };
 
@@ -86,42 +87,38 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.warehouse_id) {
+        toast.error("Please select a warehouse");
+        return;
+    }
     setLoading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const deliveryNumber = `DEL-${Date.now()}`;
+      const deliveryNumber = `DEL-${Math.floor(Math.random() * 100000)}`;
 
       if (delivery) {
-        const { error } = await supabase
-          .from("deliveries")
-          .update(formData)
-          .eq("id", delivery.id);
+        // Update
+        const { error } = await supabase.from("deliveries").update(formData).eq("id", delivery.id);
         if (error) throw error;
 
         await supabase.from("delivery_items").delete().eq("delivery_id", delivery.id);
-        
         const itemsToInsert = items.map(item => ({
           delivery_id: delivery.id,
           product_id: item.product_id,
           quantity: item.quantity,
         }));
-        
-        const { error: itemsError } = await supabase
-          .from("delivery_items")
-          .insert(itemsToInsert);
-        if (itemsError) throw itemsError;
+        await supabase.from("delivery_items").insert(itemsToInsert);
 
-        toast.success("Delivery updated successfully");
+        toast.success("Delivery updated");
       } else {
+        // Create
         const { data: newDelivery, error } = await supabase
           .from("deliveries")
           .insert([{
             ...formData,
             delivery_number: deliveryNumber,
-            created_by: user.id,
+            created_by: user?.id,
           }])
           .select()
           .single();
@@ -134,12 +131,8 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
           quantity: item.quantity,
         }));
 
-        const { error: itemsError } = await supabase
-          .from("delivery_items")
-          .insert(itemsToInsert);
-        if (itemsError) throw itemsError;
-
-        toast.success("Delivery created successfully");
+        await supabase.from("delivery_items").insert(itemsToInsert);
+        toast.success("Delivery created");
       }
 
       onSuccess();
@@ -155,7 +148,7 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass-panel border-border/50 max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl bg-gradient-primary bg-clip-text text-transparent">
+          <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
             {delivery ? "Edit Delivery" : "New Delivery"}
           </DialogTitle>
         </DialogHeader>
@@ -163,23 +156,20 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="customer">Customer Name *</Label>
+              <Label>Customer Name *</Label>
               <Input
-                id="customer"
                 value={formData.customer_name}
                 onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
                 required
-                className="glass-card border-border/50"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="warehouse">Warehouse *</Label>
+              <Label>Warehouse *</Label>
               <Select
                 value={formData.warehouse_id}
                 onValueChange={(value) => setFormData({ ...formData, warehouse_id: value })}
-                required
               >
-                <SelectTrigger className="glass-card border-border/50">
+                <SelectTrigger>
                   <SelectValue placeholder="Select warehouse" />
                 </SelectTrigger>
                 <SelectContent>
@@ -194,7 +184,7 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
           </div>
 
           <div className="space-y-2">
-            <Label>Items *</Label>
+            <Label>Products *</Label>
             <div className="space-y-2">
               {items.map((item, index) => (
                 <div key={index} className="flex gap-2 items-end">
@@ -206,10 +196,9 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
                         newItems[index].product_id = value;
                         setItems(newItems);
                       }}
-                      required
                     >
-                      <SelectTrigger className="glass-card border-border/50">
-                        <SelectValue placeholder="Select product" />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Product" />
                       </SelectTrigger>
                       <SelectContent>
                         {products.map((prod) => (
@@ -224,15 +213,12 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
                     <Input
                       type="number"
                       min="1"
-                      step="0.01"
                       value={item.quantity}
                       onChange={(e) => {
                         const newItems = [...items];
                         newItems[index].quantity = parseFloat(e.target.value);
                         setItems(newItems);
                       }}
-                      className="glass-card border-border/50"
-                      required
                     />
                   </div>
                   <Button
@@ -242,7 +228,7 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
                     onClick={() => setItems(items.filter((_, i) => i !== index))}
                     disabled={items.length === 1}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               ))}
@@ -251,7 +237,6 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
                 variant="outline"
                 size="sm"
                 onClick={() => setItems([...items, { product_id: "", quantity: 1 }])}
-                className="border-border/50"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item
@@ -259,50 +244,13 @@ const DeliveryDialog = ({ open, onOpenChange, delivery, onSuccess }: DeliveryDia
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="glass-card border-border/50"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
-            >
-              <SelectTrigger className="glass-card border-border/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="waiting">Waiting</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex justify-end gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-border/50"
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-gradient-primary hover:opacity-90 shadow-glass"
-            >
+            <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {delivery ? "Update" : "Create"} Delivery
+              Save Delivery
             </Button>
           </div>
         </form>
